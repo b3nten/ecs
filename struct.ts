@@ -210,10 +210,6 @@ function isObject(input: unknown): input is object {
 }
 
 export function validate(schema: VStructInput, input: unknown, quiet = false) {
-  if (!input || typeof input !== "object") {
-    throw new Error("Validation error: Input must be an object.");
-  }
-
   function validateImpl(schema: unknown, input: unknown) {
     if (typeof schema === "undefined") {
       throw new Error("Validation error: Schema is undefined.");
@@ -241,7 +237,7 @@ export function validate(schema: VStructInput, input: unknown, quiet = false) {
           `Validation error: Expected array but got ${typeof input}`,
         );
       }
-      for(const item of input) {
+      for (const item of input) {
         validateImpl(schema[0], item);
       }
       return;
@@ -295,52 +291,63 @@ export function validate(schema: VStructInput, input: unknown, quiet = false) {
       return;
     }
   }
-
-  if(!quiet) validateImpl(schema, input);
-  else try {
+  if (!quiet) {
     validateImpl(schema, input);
-  } catch {
-    return false;
+  } else {
+    try {
+      validateImpl(schema, input);
+    } catch {
+      return false;
+    }
   }
-  
   return true;
 }
 
-
-
-function toProxy(schema: VStructInput, input: unknown) {
-  return createDeepOnChangeProxy(input)
+function toProxy(schema: VStructInput, input: unknown, quiet = false) {
+  return createDeepOnChangeProxy(input, schema, quiet);
 }
 
 export function VStruct<
   Schema extends VStructInput,
 >(
   schema: Schema,
+  options = { quiet: false}
 ) {
   return class {
     constructor(input: any) {
-      validate(schema, input);
+      validate(schema, input, options.quiet);
       // @ts-ignore yah yah whatever
-      return toProxy(schema, input);
+      return toProxy(schema, input, options.quiet);
     }
   } as unknown as new (
     data: ConstructorToValue<Schema>,
   ) => ConstructorToValue<Schema>;
 }
 
-// type UserSchema = InferSchema<typeof userSchema>;
+const userSchema = {
+  name: String,
+  username: Optional(String),
+  email: String,
+  password: String,
+  roles: Optional(Array(Union(String, Number)))
+};
 
-// const VerifiedUser = VStruct(userSchema);
+type UserSchema = InferSchema<typeof userSchema>;
 
-// const User = Struct<UserSchema, Pick<UserSchema, "username">>({
-//   username: "anon",
-// });
+const userData: UserSchema = {
+  name: "John Doe",
+  username: "johndoe",
+  email: "j@j.ca",
+  password: "123456",
+  roles: ["admin", 1]
+};
 
-// const userData = {
-//   username: "hello",
-//   password: "world",
-//   email: "",
-// };
+const VerifiedUser = VStruct(userSchema, { quiet: true });
 
-// const user = new User(userData);
-// const verifiedUser = new VerifiedUser(user);
+const verifiedUser = new VerifiedUser(userData);
+
+console.log(verifiedUser);
+verifiedUser.name = undefined;
+verifiedUser.roles = [true];
+
+console.log(verifiedUser)
